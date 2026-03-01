@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lewis Structure → SMILES</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px;
+      color: #1e293b;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    header h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      margin-top: 8px;
+      color: #64748b;
+      font-size: 0.95rem;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      padding: 32px;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    /* ── Drop zone ── */
+    #drop-zone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 12px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+
+    #drop-zone:hover,
+    #drop-zone.drag-over {
+      border-color: #3b82f6;
+      background: #eff6ff;
+    }
+
+    #drop-zone svg {
+      width: 48px;
+      height: 48px;
+      color: #94a3b8;
+      margin-bottom: 12px;
+    }
+
+    #drop-zone.drag-over svg { color: #3b82f6; }
+
+    #drop-zone p.hint {
+      font-size: 0.9rem;
+      color: #94a3b8;
+      margin-top: 6px;
+    }
+
+    #drop-zone p.main {
+      font-size: 1rem;
+      font-weight: 500;
+      color: #475569;
+    }
+
+    #file-input { display: none; }
+
+    /* ── Preview ── */
+    #preview-section { display: none; margin-top: 24px; }
+
+    #preview-section img {
+      width: 100%;
+      max-height: 320px;
+      object-fit: contain;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+
+    .preview-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    /* ── Buttons ── */
+    button {
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    button:active { transform: scale(0.97); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    #analyze-btn {
+      background: #3b82f6;
+      color: #fff;
+      flex: 1;
+    }
+
+    #analyze-btn:hover:not(:disabled) { background: #2563eb; }
+
+    #reset-btn {
+      background: #f1f5f9;
+      color: #475569;
+    }
+
+    #reset-btn:hover { background: #e2e8f0; }
+
+    /* ── Loading ── */
+    #loading { display: none; margin-top: 24px; text-align: center; }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #e2e8f0;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 10px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #loading p { color: #64748b; font-size: 0.9rem; }
+
+    /* ── Result ── */
+    #result-section { display: none; margin-top: 24px; }
+
+    #result-section h2 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .smiles-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    #smiles-output {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 1rem;
+      color: #0f172a;
+      word-break: break-all;
+      flex: 1;
+    }
+
+    #copy-btn {
+      background: #e0f2fe;
+      color: #0369a1;
+      padding: 8px 14px;
+      flex-shrink: 0;
+      font-size: 0.8rem;
+    }
+
+    #copy-btn:hover { background: #bae6fd; }
+    #copy-btn.copied { background: #dcfce7; color: #15803d; }
+
+    /* ── Error ── */
+    #error-section {
+      display: none;
+      margin-top: 20px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 14px 16px;
+      color: #b91c1c;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Lewis Structure → SMILES</h1>
+  <p>Drop a screenshot of a Lewis structure and get the SMILES string back.</p>
+</header>
+
+<div class="card">
+
+  <!-- Drop zone -->
+  <div id="drop-zone" role="button" tabindex="0" aria-label="Upload image">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round"
+        d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+    </svg>
+    <p class="main">Drag &amp; drop an image here</p>
+    <p class="hint">or click to browse — PNG, JPG, WebP supported</p>
+    <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,image/gif" />
+  </div>
+
+  <!-- Image preview -->
+  <div id="preview-section">
+    <img id="preview-img" src="" alt="Uploaded Lewis structure" />
+    <div class="preview-actions">
+      <button id="analyze-btn">Analyze Structure</button>
+      <button id="reset-btn">Clear</button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>Analyzing structure with Claude…</p>
+  </div>
+
+  <!-- SMILES result -->
+  <div id="result-section">
+    <h2>SMILES</h2>
+    <div class="smiles-box">
+      <span id="smiles-output"></span>
+      <button id="copy-btn">Copy</button>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div id="error-section" role="alert"></div>
+
+</div>
+
+<script>
+  const dropZone    = document.getElementById('drop-zone');
+  const fileInput   = document.getElementById('file-input');
+  const previewSec  = document.getElementById('preview-section');
+  const previewImg  = document.getElementById('preview-img');
+  const analyzeBtn  = document.getElementById('analyze-btn');
+  const resetBtn    = document.getElementById('reset-btn');
+  const loading     = document.getElementById('loading');
+  const resultSec   = document.getElementById('result-section');
+  const smilesOut   = document.getElementById('smiles-output');
+  const copyBtn     = document.getElementById('copy-btn');
+  const errorSec    = document.getElementById('error-section');
+
+  let currentFile = null;
+
+  // ── Drag-and-drop events ──────────────────────────────────────────
+  ['dragenter', 'dragover'].forEach(evt =>
+    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.add('drag-over'); })
+  );
+  ['dragleave', 'dragend', 'drop'].forEach(evt =>
+    dropZone.addEventListener(evt, e => { e.preventDefault(); dropZone.classList.remove('drag-over'); })
+  );
+
+  dropZone.addEventListener('drop', e => {
+    const file = e.dataTransfer.files[0];
+    if (file) loadFile(file);
+  });
+
+  // Click to open file picker
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+  fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
+
+  // ── Load & preview a file ─────────────────────────────────────────
+  function loadFile(file) {
+    if (!file.type.startsWith('image/')) {
+      showError('Please upload an image file (PNG, JPG, or WebP).');
+      return;
+    }
+    currentFile = file;
+    const url = URL.createObjectURL(file);
+    previewImg.src = url;
+    dropZone.style.display = 'none';
+    previewSec.style.display = 'block';
+    hide(resultSec);
+    hide(errorSec);
+    hide(loading);
+  }
+
+  // ── Analyze ───────────────────────────────────────────────────────
+  analyzeBtn.addEventListener('click', async () => {
+    if (!currentFile) return;
+
+    analyzeBtn.disabled = true;
+    hide(resultSec);
+    hide(errorSec);
+    show(loading);
+
+    const formData = new FormData();
+    formData.append('image', currentFile);
+
+    try {
+      const res = await fetch('/analyze', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        showError(data.error || 'Unexpected server error.');
+      } else {
+        smilesOut.textContent = data.smiles;
+        copyBtn.textContent = 'Copy';
+        copyBtn.classList.remove('copied');
+        show(resultSec);
+      }
+    } catch (err) {
+      showError('Could not reach the server. Is app.py running?');
+    } finally {
+      hide(loading);
+      analyzeBtn.disabled = false;
+    }
+  });
+
+  // ── Copy to clipboard ─────────────────────────────────────────────
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(smilesOut.textContent).then(() => {
+      copyBtn.textContent = 'Copied!';
+      copyBtn.classList.add('copied');
+      setTimeout(() => {
+        copyBtn.textContent = 'Copy';
+        copyBtn.classList.remove('copied');
+      }, 2000);
+    });
+  });
+
+  // ── Reset ─────────────────────────────────────────────────────────
+  resetBtn.addEventListener('click', () => {
+    currentFile = null;
+    fileInput.value = '';
+    previewImg.src = '';
+    dropZone.style.display = '';
+    hide(previewSec);
+    hide(resultSec);
+    hide(errorSec);
+    hide(loading);
+  });
+
+  // ── Helpers ───────────────────────────────────────────────────────
+  function show(el) { el.style.display = 'block'; }
+  function hide(el) { el.style.display = 'none'; }
+  function showError(msg) { errorSec.textContent = msg; show(errorSec); }
+</script>
+
+</body>
+</html>
